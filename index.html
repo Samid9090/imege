@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real Image Compressor</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        body { text-align: center; background: #f4f4f4; padding: 20px; }
+        .container { max-width: 900px; margin: auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        #upload-page, #tools-page { display: none; }
+        #upload-page { display: block; }
+        #drop-area { border: 2px dashed #007bff; padding: 50px; cursor: pointer; background: #e9f5ff; border-radius: 10px; }
+        #drop-area:hover { background: #d0eaff; }
+        input, select, button { margin: 10px; padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
+        button { background: #007bff; color: white; cursor: pointer; border: none; font-size: 14px; }
+        button:hover { background: #0056b3; }
+        .image-list { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 20px; }
+        .image-item { width: 150px; background: #f9f9f9; padding: 10px; border-radius: 5px; position: relative; }
+        .image-item img { width: 100%; height: 100px; object-fit: cover; border-radius: 5px; }
+        .image-info { font-size: 12px; margin-top: 5px; color: #333; }
+        .image-buttons { display: flex; justify-content: space-between; gap: 5px; margin-top: 5px; }
+        .image-buttons button { background: #333; color: white; font-size: 10px; padding: 5px; border-radius: 3px; width: 30%; display: flex; align-items: center; justify-content: center; }
+        .image-buttons button:hover { background: #555; }
+        .plus-button { width: 100%; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 20px; background: #e9f5ff; border: 2px dashed #007bff; cursor: pointer; border-radius: 5px; margin-top: 5px; }
+        .plus-button:hover { background: #d0eaff; }
+        #banner { width: 100%; height: 90px; background: #ddd; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+        .control-buttons { display: flex; justify-content: center; gap: 5px; margin-top: 15px; }
+        .control-buttons button { font-size: 12px; padding: 6px 10px; width: 80px; }
+        #size-search { width: 200px; }
+        /* 3-Second Loader */
+        .loader-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.8); justify-content: center; align-items: center; z-index: 1000; }
+        .loader-content { text-align: center; }
+        .loader-content p { margin-top: 10px; font-size: 16px; color: #007bff; }
+        /* Icons for buttons */
+        .icon { width: 16px; height: 16px; }
+    </style>
+    <!-- AdMob Ads Script -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7482084110634566" crossorigin="anonymous"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+
+    <!-- Banner Ad -->
+    <div id="banner">
+        <ins class="adsbygoogle"
+             style="display:inline-block;width:728px;height:90px"
+             data-ad-client="ca-pub-7482084110634566"
+             data-ad-slot="4315210605"></ins>
+        <script>
+             (adsbygoogle = window.adsbygoogle || []).push({});
+        </script>
+    </div>
+
+    <!-- Upload Page -->
+    <div id="upload-page" class="container">
+        <div id="drop-area">
+            <p>Drag & Drop Images Here or Click to Select</p>
+            <input type="file" id="file-input" multiple accept="image/*" style="display: none;">
+        </div>
+    </div>
+
+    <!-- Tools Page -->
+    <div id="tools-page" class="container">
+        <input type="text" id="size-search" placeholder="Search Size (KB or MB)">
+        <select id="size-list"></select>
+        <button onclick="compressImages()">Compress Images</button>
+        <div class="control-buttons">
+            <button onclick="goHome()">Home</button>
+            <button onclick="goBack()">Back</button>
+            <button onclick="resetPage()">Reset</button>
+        </div>
+        <div class="image-list" id="image-list"></div>
+        <div class="plus-button" onclick="fileInput.click()">+</div>
+    </div>
+
+    <!-- 3-Second Loader -->
+    <div class="loader-container" id="loader-container">
+        <div class="loader-content">
+            <div class="loader"></div>
+            <p id="loader-text">Compressing... 3s</p>
+        </div>
+    </div>
+
+    <script>
+        let images = [];
+        const fileInput = document.getElementById("file-input");
+        const dropArea = document.getElementById("drop-area");
+        const uploadPage = document.getElementById("upload-page");
+        const toolsPage = document.getElementById("tools-page");
+        const sizeList = document.getElementById("size-list");
+        const sizeSearch = document.getElementById("size-search");
+        const loaderContainer = document.getElementById("loader-container");
+        const loaderText = document.getElementById("loader-text");
+
+        dropArea.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", () => handleFiles(fileInput.files));
+
+        // Generate size list
+        function generateSizeList() {
+            for (let i = 1; i <= 999; i++) {
+                sizeList.innerHTML += `<option value="${i * 1024}">${i} KB</option>`;
+            }
+            for (let i = 1; i <= 10; i++) {
+                sizeList.innerHTML += `<option value="${i * 1024 * 1024}">${i} MB</option>`;
+            }
+        }
+        generateSizeList();
+
+        // Real-time search for sizes
+        sizeSearch.addEventListener("input", () => {
+            const searchTerm = sizeSearch.value.toLowerCase();
+            const options = sizeList.options;
+            for (let i = 0; i < options.length; i++) {
+                const option = options[i];
+                if (option.text.toLowerCase().includes(searchTerm)) {
+                    option.style.display = "block";
+                } else {
+                    option.style.display = "none";
+                }
+            }
+        });
+
+        function handleFiles(files) {
+            for (let file of files) {
+                if (!file.type.startsWith("image/")) continue;
+                let reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => {
+                    let sizeKB = (file.size / 1024).toFixed(2) + " KB";
+                    images.push({ name: file.name, src: reader.result, size: sizeKB, compressedSrc: null, compressedSize: null });
+                    updateImageList();
+                };
+            }
+            uploadPage.style.display = "none";
+            toolsPage.style.display = "block";
+        }
+
+        function updateImageList() {
+            const list = document.getElementById("image-list");
+            list.innerHTML = "";
+            images.forEach((img, index) => {
+                list.innerHTML += `
+                    <div class="image-item">
+                        <img src="${img.compressedSrc || img.src}" alt="">
+                        <p class="image-info">Original: ${img.size}</p>
+                        <p class="image-info" id="compressed-size-${index}">${img.compressedSize ? `Compressed: ${img.compressedSize}` : ''}</p>
+                        <div class="image-buttons">
+                            <button onclick="downloadImage(${index})"><i class="fas fa-download icon"></i></button>
+                            <button onclick="recompressImage(${index})"><i class="fas fa-sync-alt icon"></i></button>
+                            <button onclick="deleteImage(${index})"><i class="fas fa-trash icon"></i></button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        async function compressImages() {
+            const targetSize = parseInt(sizeList.value); // Target size in bytes
+            loaderContainer.style.display = "flex";
+            let countdown = 3;
+            const interval = setInterval(() => {
+                loaderText.textContent = `Compressing... ${countdown}s`;
+                countdown--;
+                if (countdown < 0) {
+                    clearInterval(interval);
+                    loaderContainer.style.display = "none";
+                }
+            }, 1000);
+
+            for (let i = 0; i < images.length; i++) {
+                const img = images[i];
+                const srcToCompress = img.compressedSrc || img.src;
+                const compressedSrc = await compressToExactSize(srcToCompress, targetSize);
+                const compressedSize = (compressedSrc.length / 1024).toFixed(2) + " KB";
+                images[i].compressedSrc = compressedSrc;
+                images[i].compressedSize = compressedSize;
+                document.getElementById(`compressed-size-${i}`).textContent = "Compressed: " + compressedSize;
+            }
+        }
+
+        async function recompressImage(index) {
+            const targetSize = parseInt(sizeList.value); // Target size in bytes
+            loaderContainer.style.display = "flex";
+            let countdown = 3;
+            const interval = setInterval(() => {
+                loaderText.textContent = `Compressing... ${countdown}s`;
+                countdown--;
+                if (countdown < 0) {
+                    clearInterval(interval);
+                    loaderContainer.style.display = "none";
+                }
+            }, 1000);
+
+            const img = images[index];
+            const srcToCompress = img.compressedSrc || img.src;
+            const compressedSrc = await compressToExactSize(srcToCompress, targetSize);
+            const compressedSize = (compressedSrc.length / 1024).toFixed(2) + " KB";
+            images[index].compressedSrc = compressedSrc;
+            images[index].compressedSize = compressedSize;
+            document.getElementById(`compressed-size-${index}`).textContent = "Compressed: " + compressedSize;
+        }
+
+        async function compressToExactSize(src, targetSize) {
+            let quality = 0.9; // Start with high quality
+            let compressedSrc = await compressImage(src, quality);
+            while (compressedSrc.length > targetSize && quality > 0.1) {
+                quality -= 0.05; // Reduce quality incrementally
+                compressedSrc = await compressImage(src, quality);
+            }
+            return compressedSrc;
+        }
+
+        function compressImage(src, quality) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.src = src;
+                img.onload = () => {
+                    const canvas = document.createElement("canvas");
+                    const ctx = canvas.getContext("2d");
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const compressedSrc = canvas.toDataURL("image/jpeg", quality);
+                    resolve(compressedSrc);
+                };
+            });
+        }
+
+        function downloadImage(index) {
+            const img = images[index];
+            const link = document.createElement("a");
+            link.href = img.compressedSrc || img.src;
+            link.download = img.name;
+            link.click();
+        }
+
+        function goHome() {
+            uploadPage.style.display = "block";
+            toolsPage.style.display = "none";
+        }
+
+        function goBack() {
+            if (images.length > 0) {
+                images.pop();
+                updateImageList();
+            }
+        }
+
+        function resetPage() {
+            images = [];
+            updateImageList();
+        }
+
+        function deleteImage(index) {
+            images.splice(index, 1);
+            updateImageList();
+        }
+    </script>
+
+</body>
+</html>
